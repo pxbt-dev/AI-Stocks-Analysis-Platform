@@ -15,7 +15,7 @@
 <body>
     <div class="scanline"></div>
     <div class="dashboard-header">
-        <h1><span class="ai-vibe">🤖</span> <span class="accent">AI-Stocks-Analysis-Platform</span></h1>
+        <h1><span class="ai-vibe">🤖</span> <span class="accent">AI-Stock-Analysis-Platform</span></h1>
         <p class="header-subtitle">Weka ML analysing Yahoo/Finnhub stock data using
             SMA/EMA/Volatility/Momentum/Bollinger/Support-Resistance/Market Cycles for price predictions (experimental)
         </p>
@@ -35,7 +35,7 @@
         <!-- SPY Card (S&P 500 Alternative) -->
         <div class="symbol-card">
             <div class="symbol-header">
-                <div class="symbol-name btc">📈 S&P 500 ETF (SPY)</div>
+                <div class="symbol-name btc">📈 S&P 500 Index (^GSPC)</div>
                 <div class="symbol-price btc" id="spyPrice">-</div>
             </div>
             <div class="chart-container">
@@ -273,7 +273,7 @@
         // ─── TradingView symbol mapping ────────────────────────────────────────
         // TradingView uses exchange-prefixed symbols. SPY (S&P 500 ETF) is used for index tracking.
         const TV_SYMBOLS = {
-            'SPY': 'AMEX:SPY',
+            'SPY': 'INDEX:SPX',
             'AAPL': 'NASDAQ:AAPL',
             'MSFT': 'NASDAQ:MSFT',
             'GOOG': 'NASDAQ:GOOG'
@@ -351,76 +351,46 @@
             return '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         }
 
-        // ─── WebSocket ─────────────────────────────────────────────────────────
-        function connectWebSocket() {
-            console.log('🔗 Connecting to WebSocket...');
+        // ─── Polling System (REST-based) ──────────────────────────────────────
+        function startPolling() {
+            console.log('🔄 Starting live polling...');
+            updateConnectionStatus('connected', '✅ Live Polling Active (Every 60s)');
 
-            if (websocket && websocket.readyState === WebSocket.OPEN) {
-                websocket.close();
-            }
+            // Initial fetch
+            fetchLatestData();
 
+            // Repeat every 60 seconds
+            setInterval(fetchLatestData, 60000);
+        }
+
+        async function fetchLatestData() {
             try {
-                const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-                websocket = new WebSocket(`${wsProtocol}//${window.location.host}/ws`);
+                const response = await fetch('/api/chart/latest');
+                if (!response.ok) throw new Error('Polling failed');
 
-                websocket.onopen = () => {
-                    console.log('✅ WebSocket connected!');
-                    updateConnectionStatus('connected', '✅ Connected to Yahoo/Finnhub Market Data');
-                    addLogEntry('Neural link stable. Receiving live market feed.', 'success');
-                };
+                const data = await response.json();
+                console.log('📊 Received latest data:', data);
 
-                websocket.onmessage = (event) => {
-                    messageCount++;
-                    document.getElementById('messageCount').textContent = messageCount;
-                    const message = event.data;
+                // Process each symbol
+                Object.keys(data).forEach(symbol => {
+                    const update = data[symbol];
+                    if (update.price !== undefined) {
+                        const priceEl = document.getElementById(`${symbol.toLowerCase()}Price`);
+                        if (priceEl) priceEl.textContent = formatPrice(update.price, symbol);
 
-                    // Analysis messages
-                    if (message.startsWith('analysis:')) {
-                        try {
-                            const analysisData = JSON.parse(message.substring(9));
-                            if (analysisData.symbol) {
-                                updateTimeframePredictions(analysisData.symbol, analysisData);
-                            }
-                        } catch (e) {
-                            console.error('❌ Error parsing analysis:', e);
+                        if (update.analysis) {
+                            updateTimeframePredictions(symbol, update.analysis);
                         }
-                        return;
                     }
+                });
 
-                    // Price update messages
-                    try {
-                        const data = JSON.parse(message);
-                        if (data.symbol && data.price !== undefined && symbols.includes(data.symbol)) {
-                            // Update price badge
-                            const priceEl = document.getElementById(`${data.symbol.toLowerCase()}Price`);
-                            if (priceEl) priceEl.textContent = formatPrice(data.price, data.symbol);
-
-                            // Trigger AI prediction panel update from analysis block
-                            if (data.analysis && isValidAnalysis(data.analysis)) {
-                                updateTimeframePredictions(data.symbol, data.analysis);
-                            }
-                        }
-                    } catch (e) {
-                        // Not JSON — ignore
-                    }
-                };
-
-                websocket.onclose = () => {
-                    console.log('❌ WebSocket closed — reconnecting in 3s...');
-                    updateConnectionStatus('disconnected', '❌ Connection lost — Reconnecting…');
-                    addLogEntry('Neural link lost. Attempting hot-reconnect...', 'error');
-                    setTimeout(connectWebSocket, 3000);
-                };
-
-                websocket.onerror = (err) => {
-                    console.error('💥 WebSocket error:', err);
-                    updateConnectionStatus('disconnected', '❌ Connection error');
-                    addLogEntry('Uplink hardware fault detected.', 'error');
-                };
-
-            } catch (err) {
-                console.error('💥 Failed to create WebSocket:', err);
-                updateConnectionStatus('disconnected', '❌ WebSocket creation failed');
+                messageCount++;
+                document.getElementById('messageCount').textContent = messageCount;
+                addLogEntry('Market data synchronized via REST uplink.', 'success');
+            } catch (error) {
+                console.error('❌ Polling error:', error);
+                updateConnectionStatus('error', '❌ Polling Error - Retrying...');
+                addLogEntry('Uplink interference detected. Retrying...', 'warning');
             }
         }
 

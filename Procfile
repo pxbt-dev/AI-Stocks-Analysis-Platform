@@ -1,1 +1,1 @@
-web: ./mvnw clean package -DskipTests && cd target && jar xf ai-trading-charts-1.0.0.jar BOOT-INF/lib/ && java -cp "ai-trading-charts-1.0.0.jar.original:BOOT-INF/lib/*" com.pxbt.dev.aiTradingCharts.AiTradingChartsApplication
+web: ./mvnw clean package -DskipTests && cd target && jar xf ai-stocks-predictor-1.0.0.jar BOOT-INF/lib/ && java -cp "ai-stocks-predictor-1.0.0.jar.original:BOOT-INF/lib/*" com.pxbt.dev.aiStockAnalysis.AiStocksAnalysisPlatform
