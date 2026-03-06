@@ -29,13 +29,13 @@ public class RealTimeDataService {
     private long lastDataBroadcastTime = 0;
 
     @Autowired
+    private StockDataService stockDataService;
+
+    @Autowired
     private CryptoWebSocketHandler webSocketHandler;
 
     @Autowired
     private PricePredictionService predictionService;
-
-    @Autowired
-    private BinanceHistoricalService binanceHistoricalService;
 
     @Autowired
     private ChartPatternService chartPatternService;
@@ -43,85 +43,59 @@ public class RealTimeDataService {
     @Autowired
     private FibonacciTimeZoneService fibonacciTimeZoneService;
 
+    @Autowired
+    private MarketDataService marketDataService;
+
     private ObjectMapper objectMapper = new ObjectMapper();
 
-    private final List<String> symbols = Arrays.asList("BTC", "SOL", "TAO", "WIF");
-    private final Map<String, String> symbolToStream = Map.of(
-            "BTC", "btcusdt@ticker",
-            "SOL", "solusdt@ticker",
-            "TAO", "taousdt@ticker",
-            "WIF", "wifusdt@ticker"
-    );
+    private final List<String> symbols = Arrays.asList("SPY", "AAPL", "MSFT", "GOOG");
 
     @PostConstruct
     public void init() {
-        log.info("🚀 INITIALIZING RealTimeDataService - Real-Time Broadcasting Enabled");
-        log.info("📊 Real-time updates: EVERY PRICE CHANGE | Manual refresh: 2 minutes");
-        connectToBinanceWebSockets();
+        log.info("🚀 INITIALIZING RealTimeDataService - Stock Market Mode Enabled");
+        log.info("📊 Real-time updates: Polling every 60 seconds during market hours");
+        // Initial fetch
+        refreshStockPrices();
     }
 
-    private void connectToBinanceWebSockets() {
-        log.info("🔗 Connecting to Binance WebSockets (real-time mode)...");
-
-        for (String symbol : symbols) {
-            String streamName = symbolToStream.get(symbol);
-            if (streamName != null) {
-                connectToSymbolWebSocket(symbol, streamName);
-                // Small delay to avoid rate limiting
-                try { Thread.sleep(500); } catch (InterruptedException e) {}
+    @org.springframework.scheduling.annotation.Scheduled(fixedRate = 60000) // Every 1 minute - safe now with Finnhub
+                                                                            // API limits
+    public void refreshStockPrices() {
+        log.debug("🔄 Polling latest stock prices...");
+        for (int i = 0; i < symbols.size(); i++) {
+            String symbol = symbols.get(i);
+            try {
+                if (i > 0) {
+                    Thread.sleep(2000); // 2s gap between symbols to avoid rate limiting
+                }
+                PriceUpdate update = stockDataService.getCurrentPrice(symbol);
+                if (update != null) {
+                    processUpdate(update);
+                }
+            } catch (Exception e) {
+                log.error("❌ Failed to refresh stock price for {}: {}", symbol, e.getMessage());
             }
         }
-
-        log.info("✅ WebSocket connections established (real-time broadcasting)");
     }
 
-    private void connectToSymbolWebSocket(String symbol, String streamName) {
+    private void processUpdate(PriceUpdate priceUpdate) {
         try {
-            String binanceUrl = "wss://stream.binance.com:9443/ws/" + streamName;
-            log.debug("🔗 Connecting {} -> {}", symbol, binanceUrl);
+            String symbol = priceUpdate.getSymbol();
 
-            WebSocketClient client = new WebSocketClient(new URI(binanceUrl)) {
-                @Override
-                public void onMessage(String message) {
-                    // REAL-TIME MODE: Process AND broadcast every update
-                    processRealTimeUpdate(message, symbol, true);
-                }
+            // Update cache
+            updatePriceCache(symbol, priceUpdate);
 
-                @Override
-                public void onOpen(ServerHandshake handshake) {
-                    log.debug("✅ {} WebSocket CONNECTED (real-time)", symbol);
-                }
+            // Send to AI analysis
+            AIAnalysisResult analysis = analyzeWithAI(priceUpdate);
 
-                @Override
-                public void onClose(int code, String reason, boolean remote) {
-                    log.warn("❌ {} WebSocket CLOSED - Reason: {}", symbol, reason);
-                    // Don't auto-reconnect aggressively
-                    scheduleGentleReconnection(symbol, streamName);
-                }
+            // Broadcast to WebSocket clients (UI)
+            broadcastUpdate(priceUpdate, analysis);
 
-                @Override
-                public void onError(Exception ex) {
-                    log.debug("💥 {} WebSocket ERROR: {}", symbol, ex.getMessage());
-                }
-            };
-
-            client.connect();
-            webSocketClients.add(client);
+            lastDataBroadcastTime = System.currentTimeMillis();
 
         } catch (Exception e) {
-            log.error("❌ Failed to connect {} WebSocket: {}", symbol, e.getMessage());
+            log.error("❌ Error processing {} update: {}", priceUpdate.getSymbol(), e.getMessage());
         }
-    }
-
-    private void scheduleGentleReconnection(String symbol, String streamName) {
-        log.info("🔄 Scheduling {} reconnection in 30 seconds...", symbol);
-        new Timer().schedule(new TimerTask() {
-            @Override
-            public void run() {
-                log.info("🔄 Attempting {} reconnection...", symbol);
-                connectToSymbolWebSocket(symbol, streamName);
-            }
-        }, 30000); // 30 seconds - be gentle
     }
 
     /**
@@ -237,26 +211,28 @@ public class RealTimeDataService {
         try {
             double currentPrice = update.getPrice();
 
-            // Get historical data for analysis
-            List<CryptoPrice> historicalData = binanceHistoricalService.getHistoricalData(
-                    update.getSymbol(), "1d", 90 // Need more data for Fibonacci
-            );
+            // Use CACHED historical data from MarketDataService instead of hitting Yahoo
+            // Finance API
+            List<PriceUpdate> cachedHistory = marketDataService.getHistoricalData(update.getSymbol(), 90);
+            List<CryptoPrice> historicalData = cachedHistory.stream()
+                    .map(pu -> new CryptoPrice(
+                            pu.getSymbol(), pu.getPrice(), pu.getVolume(), pu.getTimestamp(),
+                            pu.getOpen(), pu.getHigh(), pu.getLow(), pu.getClose()))
+                    .collect(java.util.stream.Collectors.toList());
 
             // Detect chart patterns
             List<ChartPattern> patterns = chartPatternService.detectPatterns(
-                    update.getSymbol(), historicalData
-            );
+                    update.getSymbol(), historicalData);
 
             patterns = ensureValidChartPatterns(patterns, update.getSymbol());
 
             // Calculate Fibonacci Time Zones
             List<FibonacciTimeZone> fibZones = fibonacciTimeZoneService.calculateTimeZones(
-                    update.getSymbol(), historicalData
-            );
+                    update.getSymbol(), historicalData);
 
             // Get predictions for multiple timeframes
-            Map<String, PricePrediction> timeframePredictions =
-                    predictionService.predictMultipleTimeframes(update.getSymbol(), currentPrice);
+            Map<String, PricePrediction> timeframePredictions = predictionService
+                    .predictMultipleTimeframes(update.getSymbol(), currentPrice);
 
             log.debug("⏰ Calculated {} Fibonacci Time Zones for {}", fibZones.size(), update.getSymbol());
 
@@ -266,8 +242,7 @@ public class RealTimeDataService {
                     timeframePredictions,
                     patterns,
                     fibZones, // Include Fibonacci zones
-                    System.currentTimeMillis()
-            );
+                    System.currentTimeMillis());
 
         } catch (Exception e) {
             log.error("❌ AI ANALYSIS ERROR for {}: {}", update.getSymbol(), e.getMessage());
@@ -280,13 +255,13 @@ public class RealTimeDataService {
                     errorPredictions,
                     new ArrayList<>(),
                     new ArrayList<>(),
-                    System.currentTimeMillis()
-            );
+                    System.currentTimeMillis());
         }
     }
 
     private List<ChartPattern> ensureValidChartPatterns(List<ChartPattern> patterns, String symbol) {
-        if (patterns == null) return new ArrayList<>();
+        if (patterns == null)
+            return new ArrayList<>();
 
         return patterns.stream()
                 .map(pattern -> {
@@ -297,8 +272,7 @@ public class RealTimeDataService {
                                 pattern.getPriceLevel(),
                                 pattern.getConfidence(),
                                 pattern.getDescription() != null ? pattern.getDescription() : "No pattern detected",
-                                pattern.getTimestamp()
-                        );
+                                pattern.getTimestamp());
                     }
                     return pattern;
                 })
@@ -309,7 +283,8 @@ public class RealTimeDataService {
         try {
 
             if (analysis.getChartPatterns() != null) {
-                analysis.setChartPatterns(ensureValidChartPatterns(analysis.getChartPatterns(), priceUpdate.getSymbol()));
+                analysis.setChartPatterns(
+                        ensureValidChartPatterns(analysis.getChartPatterns(), priceUpdate.getSymbol()));
             }
 
             // Create a combined message
@@ -320,7 +295,6 @@ public class RealTimeDataService {
             broadcastMessage.put("volume", priceUpdate.getVolume());
             broadcastMessage.put("timestamp", priceUpdate.getTimestamp());
             broadcastMessage.put("analysis", analysis);
-
 
             String jsonMessage = objectMapper.writeValueAsString(broadcastMessage);
             objectMapper.readTree(jsonMessage); // This will throw if invalid JSON
@@ -336,7 +310,6 @@ public class RealTimeDataService {
             sendSafeFallbackMessage(priceUpdate);
         }
     }
-
 
     private void sendSafeFallbackMessage(PriceUpdate priceUpdate) {
         try {

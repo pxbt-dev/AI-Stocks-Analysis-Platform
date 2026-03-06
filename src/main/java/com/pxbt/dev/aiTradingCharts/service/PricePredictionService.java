@@ -13,7 +13,10 @@ import java.util.*;
 public class PricePredictionService {
 
     @Autowired
-    private BinanceHistoricalService historicalDataService;
+    private StockDataService historicalDataService;
+
+    @Autowired
+    private MarketDataService marketDataService;
 
     @Autowired
     private AIModelService aiModelService;
@@ -25,11 +28,20 @@ public class PricePredictionService {
         Map<String, PricePrediction> predictions = new LinkedHashMap<>();
 
         try {
-            // Get historical data for feature extraction
-            List<CryptoPrice> historicalData = historicalDataService.getFullHistoricalData(symbol);
+            // Use cached historical data from MarketDataService to avoid hit Yahoo Finance
+            // too much
+            List<com.pxbt.dev.aiTradingCharts.model.PriceUpdate> cachedData = marketDataService
+                    .getHistoricalData(symbol, 200);
 
-            if (historicalData.size() < 100) {
-                log.debug("Insufficient data for AI prediction: {} points", historicalData.size());
+            List<CryptoPrice> historicalData = new ArrayList<>();
+            for (com.pxbt.dev.aiTradingCharts.model.PriceUpdate pu : cachedData) {
+                historicalData.add(new CryptoPrice(
+                        pu.getSymbol(), pu.getPrice(), pu.getVolume(), pu.getTimestamp(),
+                        pu.getOpen(), pu.getHigh(), pu.getLow(), pu.getClose()));
+            }
+
+            if (historicalData.size() < 50) {
+                log.debug("Insufficient data for AI prediction for {}: only {} points", symbol, historicalData.size());
                 return createConservativePredictions(symbol, currentPrice);
             }
 
@@ -83,8 +95,9 @@ public class PricePredictionService {
             prediction.setModelName(modelType);
             prediction.setRScore(aiResult.containsKey("rScore") ? (double) aiResult.get("rScore") : 0.0);
 
-            log.debug("🎯 AI Prediction - {} {}: {:.2f}% change (confidence: {:.1f}%, model: {})",
-                    symbol, timeframe, predictedChange * 100, confidence * 100, modelType);
+            log.debug("🎯 AI Prediction - {} {}: {}% change (confidence: {}%, model: {})",
+                    symbol, timeframe, String.format("%.2f", predictedChange * 100),
+                    String.format("%.1f", confidence * 100), modelType);
 
             return prediction;
 
@@ -99,45 +112,16 @@ public class PricePredictionService {
      */
     private double[] extractAdvancedFeatures(List<CryptoPrice> data, String timeframeType) {
         double[] prices = data.stream().mapToDouble(CryptoPrice::getPrice).toArray();
-        double[] volumes = data.stream().mapToDouble(CryptoPrice::getVolume).toArray();
 
-        if (timeframeType.equals("1h") || timeframeType.equals("4h")) {
-            // SHORT-TERM features
-            return new double[] {
-                    calculateSMA(prices, 5), calculateSMA(prices, 20),
-                    calculateEMA(prices, 12), calculateRSI(prices, 14),
-                    calculateMACD(prices), calculateVolatility(prices, 10),
-                    calculateMomentum(prices, 5), calculateVolumeTrend(volumes),
-                    calculatePriceAcceleration(prices), calculateZScore(prices),
-                    calculateBollingerPosition(prices), calculateVolumePriceTrend(volumes, prices),
-                    calculateSupportResistance(prices), calculateTrendStrength(prices),
-                    calculatePriceRateOfChange(prices, 5)
-            };
-        } else if (timeframeType.equals("1d")) {
-            // MEDIUM-TERM features
-            return new double[] {
-                    calculateSMA(prices, 20), calculateSMA(prices, 50),
-                    calculateEMA(prices, 26), calculateRSI(prices, 21),
-                    calculateVolatility(prices, 20), calculateTrendStrength(prices),
-                    calculateSupportResistance(prices), calculateSeasonality(data),
-                    calculateMarketCycle(data), calculateVolumeStrength(volumes),
-                    calculatePriceRateOfChange(prices, 10), calculateMomentum(prices, 15),
-                    calculateZScore(prices), calculateBollingerPosition(prices),
-                    calculateVolumePriceTrend(volumes, prices)
-            };
-        } else {
-            // LONG-TERM features (1w)
-            return new double[] {
-                    calculateSMA(prices, 50), calculateSMA(prices, 200),
-                    calculateVolatility(prices, 50), calculateLongTermTrend(prices),
-                    calculateMarketMaturity(data), calculateSupportResistance(prices),
-                    calculateTrendStrength(prices), calculateSeasonality(data),
-                    calculateMarketCycle(data), calculateVolumeStrength(volumes),
-                    calculatePriceRateOfChange(prices, 20), calculateZScore(prices),
-                    calculateBollingerPosition(prices), calculateVolumePriceTrend(volumes, prices),
-                    calculateAdoptionMetrics(data)
-            };
-        }
+        // Standardized 11 features matching TrainingDataService
+        return new double[] {
+                calculateSMA(prices, 5), calculateSMA(prices, 20),
+                calculateEMA(prices, 12), calculateVolatility(prices, 20),
+                calculateMomentum(prices, 10), calculatePriceRateOfChange(prices, 10),
+                calculateZScore(prices), calculateTrendStrength(prices),
+                calculateSupportResistance(prices), calculateBollingerPosition(prices),
+                calculatePriceAcceleration(prices)
+        };
     }
 
     // ===== TECHNICAL INDICATORS =====
@@ -159,38 +143,6 @@ public class PricePredictionService {
             ema = (prices[i] * multiplier) + (ema * (1 - multiplier));
         }
         return ema;
-    }
-
-    private double calculateRSI(double[] prices, int period) {
-        if (prices.length < period + 1)
-            return 50.0;
-
-        double gains = 0.0;
-        double losses = 0.0;
-
-        for (int i = prices.length - period; i < prices.length - 1; i++) {
-            double change = prices[i + 1] - prices[i];
-            if (change > 0) {
-                gains += change;
-            } else {
-                losses -= change;
-            }
-        }
-
-        double avgGain = gains / period;
-        double avgLoss = losses / period;
-
-        if (avgLoss == 0)
-            return 100.0;
-
-        double rs = avgGain / avgLoss;
-        return 100.0 - (100.0 / (1 + rs));
-    }
-
-    private double calculateMACD(double[] prices) {
-        double ema12 = calculateEMA(prices, 12);
-        double ema26 = calculateEMA(prices, 26);
-        return ema12 - ema26;
     }
 
     private double calculateVolatility(double[] prices, int period) {
@@ -221,18 +173,6 @@ public class PricePredictionService {
         return ((prices[prices.length - 1] - prices[prices.length - period]) / prices[prices.length - period]) * 100;
     }
 
-    private double calculateVolumeTrend(double[] volumes) {
-        if (volumes.length < 5)
-            return 0.5;
-        double currentVolume = volumes[volumes.length - 1];
-        double avgVolume = 0.0;
-        for (int i = 0; i < volumes.length - 1; i++) {
-            avgVolume += volumes[i];
-        }
-        avgVolume /= (volumes.length - 1);
-        return currentVolume / avgVolume;
-    }
-
     private double calculatePriceAcceleration(double[] prices) {
         if (prices.length < 3)
             return 0;
@@ -259,22 +199,6 @@ public class PricePredictionService {
         double currentPrice = prices[prices.length - 1];
 
         return (currentPrice - lowerBand) / (upperBand - lowerBand);
-    }
-
-    private double calculateVolumePriceTrend(double[] volumes, double[] prices) {
-        if (prices.length < 2)
-            return 0;
-
-        double volumeSum = 0;
-        double priceChangeSum = 0;
-
-        for (int i = 1; i < prices.length; i++) {
-            double priceChange = (prices[i] - prices[i - 1]) / prices[i - 1];
-            volumeSum += volumes[i];
-            priceChangeSum += priceChange * volumes[i];
-        }
-
-        return volumeSum == 0 ? 0 : priceChangeSum / volumeSum;
     }
 
     private double calculateSupportResistance(double[] prices) {
@@ -338,18 +262,6 @@ public class PricePredictionService {
 
     private double calculateAdoptionMetrics(List<CryptoPrice> data) {
         return data.size() > 180 ? 0.05 : 0.02;
-    }
-
-    private double calculateVolumeStrength(double[] volumes) {
-        if (volumes.length < 2)
-            return 0.5;
-        double currentVolume = volumes[volumes.length - 1];
-        double avgVolume = 0.0;
-        for (int i = 0; i < volumes.length - 1; i++) {
-            avgVolume += volumes[i];
-        }
-        avgVolume /= (volumes.length - 1);
-        return currentVolume / avgVolume;
     }
 
     // ===== HELPER METHODS =====

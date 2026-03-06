@@ -3,7 +3,7 @@ package com.pxbt.dev.aiTradingCharts.controller;
 import com.pxbt.dev.aiTradingCharts.dto.ChartDataResponseDto;
 import com.pxbt.dev.aiTradingCharts.model.CryptoPrice;
 import com.pxbt.dev.aiTradingCharts.model.AIAnalysisResult;
-import com.pxbt.dev.aiTradingCharts.service.BinanceHistoricalService;
+import com.pxbt.dev.aiTradingCharts.service.StockDataService;
 import com.pxbt.dev.aiTradingCharts.service.TradingAnalysisService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -18,7 +18,7 @@ import java.util.List;
 public class ApiDataController {
 
     @Autowired
-    private BinanceHistoricalService binanceHistoricalService;
+    private StockDataService stockDataService;
 
     @Autowired
     private TradingAnalysisService tradingAnalysisService;
@@ -31,8 +31,7 @@ public class ApiDataController {
         log.info("📈 Chart data requested - Symbol: {}, Timeframe: {}", symbol, timeframe);
 
         try {
-            List<CryptoPrice> historicalData = binanceHistoricalService.getHistoricalDataReactive(symbol, timeframe, 100)
-                    .block(); // Using block() since this is a synchronous endpoint
+            List<CryptoPrice> historicalData = stockDataService.getHistoricalData(symbol, timeframe, 100);
 
             AIAnalysisResult analysis = tradingAnalysisService.analyzePriceData(historicalData, timeframe);
 

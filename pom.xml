@@ -12,11 +12,11 @@
 	</parent>
 
 	<groupId>com.pxbt.dev</groupId>
-	<artifactId>ai-trading-charts</artifactId>
+	<artifactId>ai-stocks-predictor</artifactId>
 	<version>1.0.0</version>
 	<packaging>jar</packaging>
 
-	<name>ai-trading-charts</name>
+	<name>ai-stocks-predictor</name>
 	<description>AI Trading Charts Application</description>
 
 	<properties>
@@ -148,6 +148,12 @@
 		<dependency>
 			<groupId>io.micrometer</groupId>
 			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
+		<!-- Stock Market Data -->
+		<dependency>
+			<groupId>com.yahoofinance-api</groupId>
+			<artifactId>YahooFinanceAPI</artifactId>
+			<version>3.17.0</version>
 		</dependency>
 	</dependencies>
 

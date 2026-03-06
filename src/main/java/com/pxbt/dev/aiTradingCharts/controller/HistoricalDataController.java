@@ -2,7 +2,7 @@ package com.pxbt.dev.aiTradingCharts.controller;
 
 import com.pxbt.dev.aiTradingCharts.dto.OHLCData;
 import com.pxbt.dev.aiTradingCharts.model.CryptoPrice;
-import com.pxbt.dev.aiTradingCharts.service.BinanceHistoricalService;
+import com.pxbt.dev.aiTradingCharts.service.StockDataService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -16,10 +16,10 @@ import java.util.stream.Collectors;
 @RequestMapping("/api/historical")
 public class HistoricalDataController {
 
-    private final BinanceHistoricalService binanceHistoricalService;
+    private final StockDataService stockDataService;
 
-    public HistoricalDataController(BinanceHistoricalService binanceHistoricalService) {
-        this.binanceHistoricalService = binanceHistoricalService;
+    public HistoricalDataController(StockDataService stockDataService) {
+        this.stockDataService = stockDataService;
     }
 
     @GetMapping("/{symbol}")
@@ -31,9 +31,8 @@ public class HistoricalDataController {
         log.info("📈 Historical data requested - Symbol: {}, Timeframe: {}, Limit: {}", symbol, timeframe, limit);
 
         try {
-            // ✅ Get CryptoPrice objects instead of PriceUpdate
-            List<CryptoPrice> cryptoPrices = binanceHistoricalService.getHistoricalDataReactive(symbol, timeframe, limit)
-                    .block(); // Using block() for synchronous endpoint
+            // Fetch historical data from StockDataService
+            List<CryptoPrice> cryptoPrices = stockDataService.getHistoricalData(symbol, timeframe, limit);
 
             if (cryptoPrices == null || cryptoPrices.isEmpty()) {
                 log.warn("❌ No historical data found for {} {}", symbol, timeframe);
@@ -42,14 +41,13 @@ public class HistoricalDataController {
 
             // ✅ Convert CryptoPrice to OHLCData for frontend
             List<OHLCData> ohlcData = cryptoPrices.stream()
-                    .map(price -> new OHLCData (
+                    .map(price -> new OHLCData(
                             price.getTimestamp(),
                             price.getOpen(),
                             price.getHigh(),
                             price.getLow(),
                             price.getClose(),
-                            price.getVolume()
-                    ))
+                            price.getVolume()))
                     .collect(Collectors.toList());
 
             log.info("✅ Returning {} OHLC data points for {}", ohlcData.size(), symbol);

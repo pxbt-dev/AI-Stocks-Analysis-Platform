@@ -20,36 +20,41 @@ public class MarketDataService {
 
     // Store historical data for each symbol
     private final Map<String, List<PriceUpdate>> historicalData = new ConcurrentHashMap<>();
-    // Need to keep this reasonable as many more caused out-of-memory errors on railway deploy
-    private static final int MAX_HISTORICAL_POINTS = 1000; // Match Binance loading
+    // Need to keep this reasonable as many more caused out-of-memory errors on
+    // railway deploy
+    private static final int MAX_HISTORICAL_POINTS = 1000; // Stock data cache limit
 
     @Autowired
-    private BinanceHistoricalService binanceHistoricalService;
+    private StockDataService stockDataService;
 
     /**
-     * Load extensive historical data from Binance when application starts
+     * Load extensive historical data from Stock Market when application starts
      */
     @PostConstruct
     public void loadInitialHistoricalData() {
         log.info("🔄 Loading DEEP historical data for ML...");
 
-        String[] symbols = {"BTC", "SOL", "TAO", "WIF"};
+        String[] symbols = { "SPY", "AAPL", "MSFT", "GOOG" };
 
         for (String symbol : symbols) {
             try {
-                // Force deep fetch for ML training (5 years = 1825 points)
-                List<PriceUpdate> deepData = binanceHistoricalService.getHistoricalDataAsPriceUpdate(
-                        symbol, "1d", 1825  // 5 years for proper ML training
-                );
+                // Stagger requests to avoid Yahoo Finance rate limiting (60 GET/min)
+                if (!symbol.equals(symbols[0])) {
+                    Thread.sleep(3000); // 3 second gap between symbols
+                }
+
+                // Fetch 500 daily points (~2 years) - enough for ML, conservative on API calls
+                List<PriceUpdate> deepData = stockDataService.getHistoricalDataAsPriceUpdate(
+                        symbol, "1d", 500);
 
                 if (!deepData.isEmpty()) {
                     historicalData.put(symbol, new CopyOnWriteArrayList<>(deepData));
-                    log.info("✅ Loaded {} DEEP historical points for {} (back to {})",
+                    log.info("✅ Loaded {} historical points for {} (back to {})",
                             deepData.size(), symbol,
                             new Date(deepData.get(0).getTimestamp()));
                 }
             } catch (Exception e) {
-                log.error("❌ Failed to load deep data for {}: {}", symbol, e.getMessage());
+                log.error("❌ Failed to load data for {}: {}", symbol, e.getMessage());
                 historicalData.put(symbol, new CopyOnWriteArrayList<>());
             }
         }
@@ -57,7 +62,7 @@ public class MarketDataService {
         logDataStatus();
     }
 
-    @Scheduled(fixedRate = 300000)  // Every 5 minutes
+    @Scheduled(fixedRate = 300000) // Every 5 minutes
     public void trimMemoryCache() {
         for (Map.Entry<String, List<PriceUpdate>> entry : historicalData.entrySet()) {
             List<PriceUpdate> data = entry.getValue();
@@ -66,8 +71,7 @@ public class MarketDataService {
                     // Keep only last 100 entries
                     if (data.size() > 100) {
                         List<PriceUpdate> newData = new ArrayList<>(
-                                data.subList(Math.max(0, data.size() - 100), data.size())
-                        );
+                                data.subList(Math.max(0, data.size() - 100), data.size()));
                         historicalData.put(entry.getKey(), new CopyOnWriteArrayList<>(newData));
                     }
                 }
@@ -75,7 +79,6 @@ public class MarketDataService {
         }
         log.debug("✂️ Trimmed memory caches");
     }
-
 
     /**
      * Add new price update to historical data
@@ -107,8 +110,9 @@ public class MarketDataService {
 
     /**
      * Get historical data for a symbol
+     * 
      * @param symbol The symbol to get data for
-     * @param limit Maximum number of data points to return (returns most recent)
+     * @param limit  Maximum number of data points to return (returns most recent)
      * @return List of price updates, most recent first
      */
     public List<PriceUpdate> getHistoricalData(String symbol, int limit) {
@@ -202,7 +206,7 @@ public class MarketDataService {
             log.info("   {}: {} points, {} days coverage, Current: {}",
                     symbol,
                     count,
-                    String.format("%.1f", coverage),  // This formats coverage to 1 decimal place
+                    String.format("%.1f", coverage), // This formats coverage to 1 decimal place
                     currentPrice != null ? String.format("$%.2f", currentPrice) : "N/A");
         }
     }
