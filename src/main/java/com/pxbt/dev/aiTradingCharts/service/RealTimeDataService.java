@@ -11,9 +11,10 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
 import java.net.URI;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
 
@@ -53,9 +54,18 @@ public class RealTimeDataService {
     @PostConstruct
     public void init() {
         log.info("🚀 INITIALIZING RealTimeDataService - Stock Market Mode Enabled");
-        log.info("📊 Real-time updates: Polling every 60 seconds during market hours");
-        // Initial fetch
-        refreshStockPrices();
+
+        // Run initial fetch in background to avoid blocking startup health checks
+        CompletableFuture.runAsync(() -> {
+            try {
+                // Wait 5 seconds to let the port open and health checks pass
+                Thread.sleep(5000);
+                log.info("📊 Fetching initial stock prices in background...");
+                refreshStockPrices();
+            } catch (Exception e) {
+                log.error("❌ Initial price fetch failed: {}", e.getMessage());
+            }
+        });
     }
 
     @org.springframework.scheduling.annotation.Scheduled(fixedRate = 60000) // Every 1 minute - safe now with Finnhub

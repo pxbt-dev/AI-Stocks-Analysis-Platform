@@ -6,11 +6,14 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
-import javax.annotation.PostConstruct;
+import jakarta.annotation.PostConstruct;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -28,38 +31,35 @@ public class MarketDataService {
     private StockDataService stockDataService;
 
     /**
-     * Load extensive historical data from Stock Market when application starts
+     * Load historical data AFTER the app is ready.
+     * This ensures the web server starts immediately and passes health checks.
      */
-    @PostConstruct
+    @EventListener(ApplicationReadyEvent.class)
     public void loadInitialHistoricalData() {
-        log.info("🔄 Loading DEEP historical data for ML...");
+        CompletableFuture.runAsync(() -> {
+            log.info("🔄 App Ready: Loading DEEP historical data in background...");
 
-        String[] symbols = { "SPY", "AAPL", "MSFT", "GOOG" };
+            String[] symbols = { "SPY", "AAPL", "MSFT", "GOOG" };
 
-        for (String symbol : symbols) {
-            try {
-                // Stagger requests to avoid Yahoo Finance rate limiting (60 GET/min)
-                if (!symbol.equals(symbols[0])) {
-                    Thread.sleep(3000); // 3 second gap between symbols
+            for (String symbol : symbols) {
+                try {
+                    // Stagger requests to avoid Yahoo Finance rate limiting
+                    Thread.sleep(2000);
+
+                    List<PriceUpdate> deepData = stockDataService.getHistoricalDataAsPriceUpdate(
+                            symbol, "1d", 500);
+
+                    if (!deepData.isEmpty()) {
+                        historicalData.put(symbol, new CopyOnWriteArrayList<>(deepData));
+                        log.info("✅ Background Load: {} points for {}", deepData.size(), symbol);
+                    }
+                } catch (Exception e) {
+                    log.error("❌ Failed to load data for {}: {}", symbol, e.getMessage());
                 }
-
-                // Fetch 500 daily points (~2 years) - enough for ML, conservative on API calls
-                List<PriceUpdate> deepData = stockDataService.getHistoricalDataAsPriceUpdate(
-                        symbol, "1d", 500);
-
-                if (!deepData.isEmpty()) {
-                    historicalData.put(symbol, new CopyOnWriteArrayList<>(deepData));
-                    log.info("✅ Loaded {} historical points for {} (back to {})",
-                            deepData.size(), symbol,
-                            new Date(deepData.get(0).getTimestamp()));
-                }
-            } catch (Exception e) {
-                log.error("❌ Failed to load data for {}: {}", symbol, e.getMessage());
-                historicalData.put(symbol, new CopyOnWriteArrayList<>());
             }
-        }
 
-        logDataStatus();
+            logDataStatus();
+        });
     }
 
     @Scheduled(fixedRate = 300000) // Every 5 minutes
