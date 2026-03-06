@@ -35,7 +35,8 @@ public class TrainingDataService {
         // Train on startup (async to not block)
         CompletableFuture.runAsync(() -> {
             try {
-                Thread.sleep(30000); // Wait 30 seconds for data to load
+                log.info("⏳ AI Training standby: waiting 60s for system stabilization...");
+                Thread.sleep(60000); // Wait 60 seconds for data to load
                 collectTrainingData();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
