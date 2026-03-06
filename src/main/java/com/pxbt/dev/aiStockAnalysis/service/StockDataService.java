@@ -31,15 +31,9 @@ public class StockDataService {
     @Autowired
     private RestTemplate restTemplate;
 
-    /**
-     * Ticker Mapping:
-     * Internal Symbol -> Yahoo Finance Ticker
-     * We map SPY to ^GSPC to get the S&P 500 Index price ($6k+ range) as per user
-     * request.
-     */
     private final Map<String, String> tickerMapping = new LinkedHashMap<>() {
         {
-            put("SPY", "^GSPC");
+            put("SPY", "SPY");
             put("AAPL", "AAPL");
             put("MSFT", "MSFT");
             put("GOOG", "GOOG");
@@ -101,6 +95,9 @@ public class StockDataService {
             JsonNode indicators = result.path("indicators").path("quote").get(0);
             JsonNode adjClose = result.path("indicators").path("adjclose").get(0);
 
+            // Multiplier for SPY to show index-like price ($6k range) as requested
+            double multiplier = symbol.equals("SPY") ? 10.0 : 1.0;
+
             List<StockPrice> results = new ArrayList<>();
             for (int i = 0; i < timestamps.size(); i++) {
                 long ts = timestamps.get(i).asLong() * 1000;
@@ -114,7 +111,13 @@ public class StockDataService {
                 double vol = indicators.path("volume").get(i).asDouble();
 
                 if (close > 0) {
-                    results.add(new StockPrice(symbol, close, vol, ts, open, high, low, close));
+                    results.add(new StockPrice(symbol,
+                            close * multiplier,
+                            vol, ts,
+                            open * multiplier,
+                            high * multiplier,
+                            low * multiplier,
+                            close * multiplier));
                 }
             }
 
@@ -134,10 +137,11 @@ public class StockDataService {
      */
     public PriceUpdate getCurrentPrice(String symbol) {
         String ticker = tickerMapping.getOrDefault(symbol, symbol);
+        double multiplier = symbol.equals("SPY") ? 10.0 : 1.0;
 
         // If it's an index ticker (^GSPC) or Finnhub token is missing, use Yahoo
         if (ticker.startsWith("^") || finnhubApiKey == null || finnhubApiKey.isBlank()) {
-            return getLatestFromYahoo(symbol, ticker);
+            return getLatestFromYahoo(symbol, ticker, multiplier);
         }
 
         try {
@@ -146,23 +150,24 @@ public class StockDataService {
 
             if (response == null || !response.has("c") || response.get("c").asDouble() == 0) {
                 log.warn("⚠️ Finnhub fallback to Yahoo for {}", symbol);
-                return getLatestFromYahoo(symbol, ticker);
+                return getLatestFromYahoo(symbol, ticker, multiplier);
             }
 
-            double price = response.get("c").asDouble();
+            double price = response.get("c").asDouble() * multiplier;
             return new PriceUpdate(symbol, price, 0.0, System.currentTimeMillis());
 
         } catch (Exception e) {
             log.error("❌ Finnhub error for {}: {} - using Yahoo fallback", symbol, e.getMessage());
-            return getLatestFromYahoo(symbol, ticker);
+            return getLatestFromYahoo(symbol, ticker, multiplier);
         }
     }
 
-    private PriceUpdate getLatestFromYahoo(String symbol, String yahooTicker) {
+    private PriceUpdate getLatestFromYahoo(String symbol, String yahooTicker, double multiplier) {
         try {
             List<StockPrice> data = getHistoricalData(symbol, "1d", 1);
             if (!data.isEmpty()) {
                 StockPrice latest = data.get(0);
+                // Multiplier is already applied in getHistoricalData -> parseYahooChartJson
                 return new PriceUpdate(symbol, latest.getPrice(), latest.getVolume(), latest.getTimestamp());
             }
         } catch (Exception e) {

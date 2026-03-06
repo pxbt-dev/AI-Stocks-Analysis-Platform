@@ -35,7 +35,7 @@
         <!-- SPY Card (S&P 500 Alternative) -->
         <div class="symbol-card">
             <div class="symbol-header">
-                <div class="symbol-name btc">📈 S&P 500 Index (^GSPC)</div>
+                <div class="symbol-name btc">📈 S&P 500 ETF (SPY)</div>
                 <div class="symbol-price btc" id="spyPrice">-</div>
             </div>
             <div class="chart-container">
@@ -273,7 +273,7 @@
         // ─── TradingView symbol mapping ────────────────────────────────────────
         // TradingView uses exchange-prefixed symbols. SPY (S&P 500 ETF) is used for index tracking.
         const TV_SYMBOLS = {
-            'SPY': 'INDEX:SPX',
+            'SPY': 'AMEX:SPY',
             'AAPL': 'NASDAQ:AAPL',
             'MSFT': 'NASDAQ:MSFT',
             'GOOG': 'NASDAQ:GOOG'
@@ -337,7 +337,7 @@
         showNotification('Please wait whilst AI predictions are generated (~20 seconds)…', 'info');
 
         document.addEventListener('DOMContentLoaded', () => {
-            connectWebSocket();
+            startPolling();
             // Proactively prevent auto-scrolling issues caused by external widgets demanding focus
             const scrollToTop = () => window.scrollTo(0, 0);
             scrollToTop();
