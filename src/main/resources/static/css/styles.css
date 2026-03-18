@@ -687,7 +687,7 @@ body::after {
 }
 
 .accordion-item.open .accordion-body {
-    max-height: 300px;
+    max-height: 600px;
     padding-top: 8px;
 }
 

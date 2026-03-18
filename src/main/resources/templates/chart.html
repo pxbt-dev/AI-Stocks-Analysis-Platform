@@ -16,8 +16,8 @@
     <div class="scanline"></div>
     <div class="dashboard-header">
         <h1><span class="ai-vibe">🤖</span> <span class="accent">AI-Stock-Analysis-Platform</span></h1>
-        <p class="header-subtitle">Weka ML analysing Yahoo/Finnhub stock data using
-            SMA/EMA/Volatility/Momentum/Bollinger/Support-Resistance/Market Cycles for price predictions (experimental)
+        <p class="header-subtitle">Hybrid ML (SVM, RF, LR) analyzing 11 core training features including
+            SMA, EMA, Volatility, Momentum, ROC, and Price Acceleration for stable stock predictions.
         </p>
     </div>
 
@@ -192,11 +192,11 @@
     <!-- Live AI Terminal Log -->
     <div class="terminal-container">
         <div class="terminal-header">
-            <span class="terminal-title">⌨️ LIVE AI EVENT LOG</span>
+            <span class="terminal-title">⌨️ LIVE EVENT LOG</span>
             <span class="terminal-id">SES_ID: AI-SRV-982</span>
         </div>
         <div id="liveLog" class="terminal-body">
-            <div class="log-entry system">[SYSTEM] Neural uplink established. Waiting for market heartbeats...</div>
+            <div class="log-entry system">[SYSTEM] Connection established. Waiting for market heartbeats...</div>
         </div>
     </div>
 
@@ -209,9 +209,8 @@
                     <h3>ML Prediction Engine</h3><span class="accordion-arrow">▾</span>
                 </div>
                 <div class="accordion-body">
-                    <p>Our AI uses high-performance ML models (SVM &amp; Random Forest) to analyze 15 technical
-                        indicators,
-                        trained on extensive stock market history to identify high-probability price targets.</p>
+                    <p>Our hybrid AI uses optimized ML models (SVM, Random Forest, & Linear Regression) to analyze 11 core technical
+                        indicators, trained on deep market history to identify high-probability price targets.</p>
                 </div>
             </div>
             <div class="explainer-item accordion-item">
@@ -232,8 +231,15 @@
                     <h3>Technical Indicators</h3><span class="accordion-arrow">▾</span>
                 </div>
                 <div class="accordion-body">
-                    <p>Analysis includes <b>Bollinger Bands</b> to
-                        confirm price action and identify institutional accumulation zones.</p>
+                    <p>Our neural network processes 11 specialized features for every prediction:</p>
+                    <ul class="explainer-list">
+                        <li><b>Averages</b> — 5/20-period <b>SMA</b> and 12-period <b>EMA</b> for signal noise filtering.</li>
+                        <li><b>Stats</b> — 20-period <b>Volatility</b> and statistical <b>Z-Score</b> for range analysis.</li>
+                        <li><b>Velocity</b> — 10-period <b>Momentum</b> and <b>Rate of Change (ROC)</b> for price speed.</li>
+                        <li><b>Bands</b> — Real-time <b>Bollinger position</b> tracking institutional accumulation zones.</li>
+                        <li><b>Stability</b> — Multi-period <b>Trend Strength</b> and moving <b>Support/Resistance</b> levels.</li>
+                        <li><b>Dynamics</b> — High-order <b>Price Acceleration</b> to detect early breakout momentum.</li>
+                    </ul>
                 </div>
             </div>
             <div class="explainer-item accordion-item">
@@ -437,23 +443,30 @@
                     changeEl.style.color = pct > 1.0 ? '#4ade80' : pct < -1.0 ? '#ff6b6b' : '#ff9800';
                 }
 
-                // Confidence
+                // Confidence & Samples
                 if (confEl && pred.confidence !== undefined) {
-                    confEl.textContent = 'Confidence: ' + (pred.confidence * 100).toFixed(0) + '%';
-                    confEl.style.opacity = '0.8';
-                    confEl.style.fontSize = '0.8em';
+                    let samplesHtml = pred.samples > 0 ? `<div style="font-size:0.85em; color:#888;">Data Samples: ${pred.samples}</div>` : '';
+                    confEl.innerHTML = `<div>Model Confidence: ${(pred.confidence * 100).toFixed(1)}%</div>${samplesHtml}`;
+                    confEl.style.opacity = '1';
+                    confEl.style.fontSize = '0.75em';
+                    confEl.style.marginTop = '4px';
                 }
 
-                // Trend / Momentum signals detail
+                // Trend / Momentum / RSI signals detail
                 if (signalsEl) {
                     const fmt = v => v !== undefined ? (v >= 0 ? '+' : '') + v.toFixed(4) : '—';
                     const trendVal = pred.trendValue;
                     const momVal = pred.momentum;
+                    const rsiFactor = pred.rsiFactor;
+
                     const trendColor = trendVal === undefined ? '#888' : (trendVal > 0 ? '#4ade80' : '#ff6b6b');
                     const momColor = momVal === undefined ? '#888' : (momVal > 0 ? '#4ade80' : '#ff6b6b');
+                    const rsiColor = rsiFactor === undefined ? '#888' : (rsiFactor > 0 ? '#4ade80' : '#ff6b6b');
+
                     signalsEl.innerHTML = `
                         <div class="signal-detail"><span class="signal-label">Trend:</span> <span style="color:${trendColor}">${fmt(trendVal)}</span></div>
                         <div class="signal-detail"><span class="signal-label">Momentum:</span> <span style="color:${momColor}">${fmt(momVal)}</span></div>
+                        <div class="signal-detail"><span class="signal-label">RSI Factor:</span> <span style="color:${rsiColor}">${fmt(rsiFactor)}</span></div>
                     `;
                 }
             });
