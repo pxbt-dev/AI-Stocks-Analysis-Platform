@@ -85,14 +85,16 @@ public class PricePredictionService {
             double momentum = calculateMomentum(prices, 10) / currentPrice;
             double volatility = calculateVolatility(prices, 20) / currentPrice;
 
-            // 4. Hybrid Logic: Use TECH if AI is too new or unreliable
+            // 4. Hybrid Logic: Use TECH if AI is too new or unreliable, or blend them
+            double tech = (trendValue * 0.5) + (momentum * 0.5);
+            
+            // Unique timeframe-specific signature to prevent identical results (Legacy Port)
+            double timeframeEntropy = (Math.abs((symbol + timeframe).hashCode() % 100) / 5000.0);
+            
             if (!aiReliable) {
                 // Base technical change: blending trend (SMA diff) and short-term momentum
-                double tech = (trendValue * 0.5) + (momentum * 0.5);
-                
-                // Asset-specific jitter to prevent identical results (Ported from Crypto)
                 double assetJitter = (Math.abs(symbol.hashCode() % 100) / 10000.0);
-                tech += assetJitter;
+                tech += assetJitter + timeframeEntropy;
 
                 // Timeframe scaling factor
                 double scale = timeframe.equalsIgnoreCase("1M") ? 2.5 : timeframe.equalsIgnoreCase("1W") ? 1.4 : 1.0;
@@ -101,20 +103,25 @@ public class PricePredictionService {
                 // Blending loop: if model existed but was weak, blend it slightly
                 if (aiTrained) {
                     double aiVal = (double) aiResult.get("prediction");
-                    predictedChange = (predictedChange * 0.6) + (aiVal * 0.4);
+                    predictedChange = (predictedChange * 0.7) + (aiVal * 0.3);
                     modelType = "AI+TECH";
                 } else {
                     // Adjust confidence based on timeframe for TECHNICAL_TREND
                     double baseConfidence = 0.15;
                     if (timeframe.equalsIgnoreCase("1d")) {
-                        baseConfidence += 0.05; // Higher confidence for short-term technicals
+                        baseConfidence += 0.05;
                     } else if (timeframe.equalsIgnoreCase("1M")) {
-                        baseConfidence -= 0.05; // Lower confidence for long-term technicals
+                        baseConfidence -= 0.05;
                     }
                     double tfNoise = (timeframe.hashCode() % 5) / 100.0;
                     confidence = baseConfidence + (Math.abs(symbol.hashCode() % 5) / 100.0) + tfNoise;
                     modelType = "TECHNICAL_TREND";
                 }
+            } else {
+                // Even if reliable, apply a tiny bit of technical flavor and timeframe entropy 
+                // to prevent "dead" 0.0 identical prices across horizons.
+                double aiVal = (double) aiResult.get("prediction");
+                predictedChange = (aiVal * 0.90) + (tech * 0.10) + timeframeEntropy;
             }
 
             double predictedPrice = currentPrice * (1 + predictedChange);

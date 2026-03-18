@@ -76,8 +76,11 @@ public class AIModelService {
                 
                 trainedModels.put(key, bestModel);
                 modelPerformance.put(key, performance);
+                
+                Instances header = generateHeader(featuresList.get(0).length, timeframe);
+                dataHeaders.put(key, header);
 
-                saveModelToDisk(key, bestModel, performance, generateHeader(featuresList.get(0).length, timeframe));
+                saveModelToDisk(key, bestModel, performance, header);
 
                 log.info("Model trained & saved for {} - R2: {}, RMSE: {}",
                         key, String.format("%.4f", performance.getR2()), String.format("%.4f", performance.getRmse()));
@@ -276,7 +279,9 @@ public class AIModelService {
             result.put("model", model.getClass().getSimpleName());
             result.put("rScore", perf != null ? perf.getR2() : 0.0);
             result.put("samples", perf != null ? perf.getTrainingSampleSize() : 0);
-            result.put("isReliable", confidence > 0.25);
+            
+            // Increased reliability threshold to avoid "boring" 0.0 predictions
+            result.put("isReliable", confidence > 0.35);
 
             return result;
         } catch (Exception e) {
