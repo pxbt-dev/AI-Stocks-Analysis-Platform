@@ -179,7 +179,8 @@ public class StockDataService {
     private String timeframeToRange(String timeframe) {
         return switch (timeframe) {
             case "1m", "5m", "15m", "30m", "1h" -> "1d";
-            case "4h", "1d" -> "2y";
+            case "4h", "1d" -> "10y";
+
             case "1W" -> "5y";
             case "1M" -> "10y";
             default -> "2y";

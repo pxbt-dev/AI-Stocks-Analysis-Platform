@@ -1,261 +1,246 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Stocks Analysis Platform</title>
-    <meta name="description"
-        content="Institutional-grade AI stock analysis platform with real-time predictions for SPY (S&P 500), AAPL, MSFT and GOOG using SVM & Random Forest ML models.">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap">
+    <title>AI-Stocks-Analysis-Platform</title>
+    <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-moment@1.0.1/dist/chartjs-adapter-moment.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-chart-financial@0.2.1/dist/chartjs-chart-financial.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
     <link rel="stylesheet" href="/css/styles.css">
+    <style>
+        /* Transparent log styling */
+        .terminal-container {
+            background: #1a1a2e;
+            border: 1px solid #2d2d4d;
+            margin: 30px auto;
+            max-width: 900px;
+            font-family: 'Courier New', monospace;
+            border-radius: 10px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        }
+
+        .terminal-header {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px 20px;
+            border-bottom: 1px solid #2d2d4d;
+            display: flex;
+            justify-content: space-between;
+            color: #888;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .terminal-body {
+            height: 180px;
+            overflow-y: auto;
+            padding: 15px;
+            font-size: 12px;
+            line-height: 1.4;
+            color: #ccc;
+            background: #0f0f23;
+        }
+
+        .log-entry { margin-bottom: 4px; white-space: pre-wrap; word-break: break-all; }
+        .log-info { color: #e0e0e0; }
+        .log-success { color: #4ade80; }
+        .log-warning { color: #ff9800; }
+        .log-error { color: #f44336; }
+
+        /* Metric Grid Styling */
+        .metric-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 0.85em; /* Slightly larger for readability */
+            margin-top: 6px; /* Increased vertical spacing */
+            border-bottom: 1px solid rgba(255,255,255,0.03);
+            padding-bottom: 3px;
+        }
+        .metric-label { color: #888; font-weight: 600; }
+        .metric-value { font-family: 'Courier New', monospace; font-weight: bold; }
+        
+        .val-positive { color: #4caf50; }
+        .val-negative { color: #f44336; }
+        .val-neutral { color: #ff9800; }
+        
+        .timeframe-item {
+            min-height: 240px !important; /* Slightly taller */
+            padding: 15px !important;
+            display: flex;
+            flex-direction: column;
+            align-items: stretch !important; /* Stretch columns to fill width */
+        }
+
+    </style>
 </head>
 
 <body>
-    <div class="scanline"></div>
     <div class="dashboard-header">
-        <h1><span class="ai-vibe">🤖</span> <span class="accent">AI-Stock-Analysis-Platform</span></h1>
-        <p class="header-subtitle">Experimental AI platform distilling multi-source data from <b>Yahoo Finance</b> and <b>Finnhub</b> 
-            into predictive patterns using the <b>Weka</b> ML suite and custom technical indicators.
-        </p>
+            <h1 class="premium-title">📊 AI-Stocks-Analysis-Platform</h1>
+        <p>Experimental app using Weka ML to analyse stock OHLC data using <a href="https://github.com/ta4j/ta4j" style="color: #00d9ff; text-decoration: none;">ta4j library</a> for technical analysis. Please do not use as a tool to trade!</p>
     </div>
 
     <div class="status-bar">
         <div>
-            <span id="connectionStatus" class="status-pulse">📡 INITIALIZING NEURAL UPLINK...</span>
+            <span id="connectionStatus" class="status-connected">✅ Connected to Market Engine</span>
             <div class="last-update">
-                SYSTEM_LATENCY: <span id="messageCount">0</span>ms
+                Polling Interval: <span id="pollingCount">Active</span>
             </div>
         </div>
     </div>
 
     <div class="symbols-grid">
+        <!-- Loop for all symbols -->
+        <script>
+            const symbols = ['SPY', 'AAPL', 'MSFT', 'GOOG'];
+            const tickerIcon = { 'SPY': '📈', 'AAPL': '🍎', 'MSFT': '💻', 'GOOG': '🔍' };
+            const tickerNames = { 'SPY': 'S&P 500 ETF', 'AAPL': 'Apple Inc.', 'MSFT': 'Microsoft', 'GOOG': 'Alphabet' };
+            
+            symbols.forEach(symbol => {
+                document.write(`
+                    <div class="symbol-card">
+                        <div class="symbol-header">
+                            <div class="symbol-name ${symbol.toLowerCase()}">${tickerIcon[symbol]} ${tickerNames[symbol]} (${symbol})</div>
+                            <div class="symbol-price ${symbol.toLowerCase()}" id="${symbol.toLowerCase()}Price">-</div>
+                        </div>
+                        <div class="chart-container">
+                            <div class="chart-header">
+                                <div class="chart-title">Price Chart</div>
+                                <div style="display: flex; align-items: center;">
+                                    <select class="time-scale-selector" onchange="changeTimeScale('${symbol}', this.value)">
+                                        <option value="1d" selected>1D</option>
+                                        <option value="1W">1W</option>
+                                        <option value="1M">1M</option>
+                                    </select>
+                                    <button class="refresh-chart-btn" onclick="refreshChart('${symbol}')" title="Refresh Chart">🔄</button>
+                                </div>
+                            </div>
+                            <canvas id="${symbol.toLowerCase()}Chart"></canvas>
+                        </div>
+                        <div class="analysis-grid">
+                            <div class="timeframe-predictions">
+                                <div class="timeframe-title">Timeframe Predictions</div>
+                                <div class="timeframe-grid">
+                                    ${['1D', '1W', '1M'].map(tf => `
+                                        <div class="timeframe-item">
+                                            <div class="timeframe-label">${tf}</div>
+                                            <div class="timeframe-prediction" id="${symbol.toLowerCase()}Prediction${tf}">-</div>
+                                            <div class="timeframe-change" id="${symbol.toLowerCase()}Change${tf}">-</div>
+                                            <div class="timeframe-confidence" id="${symbol.toLowerCase()}Confidence${tf}">Model Confidence: -</div>
+                                            <div class="timeframe-samples" id="${symbol.toLowerCase()}Samples${tf}" style="display: block;">Data Samples: -</div>
+                                            
+                                            <div class="timeframe-signals">
+                                                <div class="signal-detail">
+                                                    <span class="signal-label">Trend:</span>
+                                                    <span id="${symbol.toLowerCase()}Trend${tf}" class="">-</span>
+                                                </div>
+                                                <div class="signal-detail">
+                                                    <span class="signal-label">Momentum:</span>
+                                                    <span id="${symbol.toLowerCase()}Momentum${tf}" class="">-</span>
+                                                </div>
+                                                <div class="signal-detail">
+                                                    <span class="signal-label">RSI Factor:</span>
+                                                    <span id="${symbol.toLowerCase()}RSI${tf}" class="">-</span>
+                                                </div>
+                                                <div class="signal-detail" style="margin-top: 2px; border-top: 1px dashed rgba(255,255,255,0.1); padding-top: 2px;">
 
-        <!-- SPY Card (S&P 500 Alternative) -->
-        <div class="symbol-card">
-            <div class="symbol-header">
-                <div class="symbol-name btc">📈 S&P 500 ETF (SPY)</div>
-                <div class="symbol-price btc" id="spyPrice">-</div>
-            </div>
-            <div class="chart-container">
-                <div id="tv-spy"></div>
-            </div>
-            <div class="analysis-grid">
-                <div class="timeframe-predictions">
-                    <div class="timeframe-title">AI Timeframe Predictions</div>
-                    <div class="timeframe-grid">
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1D</div>
-                            <div class="timeframe-prediction" id="spyPrediction1D">-</div>
-                            <div class="timeframe-change" id="spyChange1D">-</div>
-                            <div class="timeframe-confidence" id="spyConfidence1D">-</div>
-                            <div class="timeframe-signals" id="spySignals1D"></div>
-                        </div>
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1W</div>
-                            <div class="timeframe-prediction" id="spyPrediction1W">-</div>
-                            <div class="timeframe-change" id="spyChange1W">-</div>
-                            <div class="timeframe-confidence" id="spyConfidence1W">-</div>
-                            <div class="timeframe-signals" id="spySignals1W"></div>
-                        </div>
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1M</div>
-                            <div class="timeframe-prediction" id="spyPrediction1M">-</div>
-                            <div class="timeframe-change" id="spyChange1M">-</div>
-                            <div class="timeframe-confidence" id="spyConfidence1M">-</div>
-                            <div class="timeframe-signals" id="spySignals1M"></div>
+                                                    <span class="signal-label">Wyckoff:</span>
+
+                                                    <span id="${symbol.toLowerCase()}Wyckoff${tf}" style="font-size: 0.85em; font-weight: 900; letter-spacing: 0.5px;">-</span>
+                                                </div>
+                                                <div class="signal-detail">
+                                                    <span class="signal-label">Volatility:</span>
+                                                    <span id="${symbol.toLowerCase()}Volatility${tf}" class="">-</span>
+                                                </div>
+                                                <div class="signal-detail">
+                                                    <span class="signal-label">Money Flow:</span>
+                                                    <span id="${symbol.toLowerCase()}MoneyFlow${tf}" class="">-</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+
+                                </div>
+                            </div>
                         </div>
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- AAPL Card -->
-        <div class="symbol-card">
-            <div class="symbol-header">
-                <div class="symbol-name sol">🍎 Apple (AAPL)</div>
-                <div class="symbol-price sol" id="aaplPrice">-</div>
-            </div>
-            <div class="chart-container">
-                <div id="tv-aapl"></div>
-            </div>
-            <div class="analysis-grid">
-                <div class="timeframe-predictions">
-                    <div class="timeframe-title">AI Timeframe Predictions</div>
-                    <div class="timeframe-grid">
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1D</div>
-                            <div class="timeframe-prediction" id="aaplPrediction1D">-</div>
-                            <div class="timeframe-change" id="aaplChange1D">-</div>
-                            <div class="timeframe-confidence" id="aaplConfidence1D">-</div>
-                            <div class="timeframe-signals" id="aaplSignals1D"></div>
-                        </div>
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1W</div>
-                            <div class="timeframe-prediction" id="aaplPrediction1W">-</div>
-                            <div class="timeframe-change" id="aaplChange1W">-</div>
-                            <div class="timeframe-confidence" id="aaplConfidence1W">-</div>
-                            <div class="timeframe-signals" id="aaplSignals1W"></div>
-                        </div>
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1M</div>
-                            <div class="timeframe-prediction" id="aaplPrediction1M">-</div>
-                            <div class="timeframe-change" id="aaplChange1M">-</div>
-                            <div class="timeframe-confidence" id="aaplConfidence1M">-</div>
-                            <div class="timeframe-signals" id="aaplSignals1M"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- MSFT Card -->
-        <div class="symbol-card">
-            <div class="symbol-header">
-                <div class="symbol-name tao">💻 Microsoft (MSFT)</div>
-                <div class="symbol-price tao" id="msftPrice">-</div>
-            </div>
-            <div class="chart-container">
-                <div id="tv-msft"></div>
-            </div>
-            <div class="analysis-grid">
-                <div class="timeframe-predictions">
-                    <div class="timeframe-title">AI Timeframe Predictions</div>
-                    <div class="timeframe-grid">
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1D</div>
-                            <div class="timeframe-prediction" id="msftPrediction1D">-</div>
-                            <div class="timeframe-change" id="msftChange1D">-</div>
-                            <div class="timeframe-confidence" id="msftConfidence1D">-</div>
-                            <div class="timeframe-signals" id="msftSignals1D"></div>
-                        </div>
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1W</div>
-                            <div class="timeframe-prediction" id="msftPrediction1W">-</div>
-                            <div class="timeframe-change" id="msftChange1W">-</div>
-                            <div class="timeframe-confidence" id="msftConfidence1W">-</div>
-                            <div class="timeframe-signals" id="msftSignals1W"></div>
-                        </div>
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1M</div>
-                            <div class="timeframe-prediction" id="msftPrediction1M">-</div>
-                            <div class="timeframe-change" id="msftChange1M">-</div>
-                            <div class="timeframe-confidence" id="msftConfidence1M">-</div>
-                            <div class="timeframe-signals" id="msftSignals1M"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- GOOG Card -->
-        <div class="symbol-card">
-            <div class="symbol-header">
-                <div class="symbol-name wif">🔍 Google (GOOG)</div>
-                <div class="symbol-price wif" id="googPrice">-</div>
-            </div>
-            <div class="chart-container">
-                <div id="tv-goog"></div>
-            </div>
-            <div class="analysis-grid">
-                <div class="timeframe-predictions">
-                    <div class="timeframe-title">AI Timeframe Predictions</div>
-                    <div class="timeframe-grid">
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1D</div>
-                            <div class="timeframe-prediction" id="googPrediction1D">-</div>
-                            <div class="timeframe-change" id="googChange1D">-</div>
-                            <div class="timeframe-confidence" id="googConfidence1D">-</div>
-                            <div class="timeframe-signals" id="googSignals1D"></div>
-                        </div>
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1W</div>
-                            <div class="timeframe-prediction" id="googPrediction1W">-</div>
-                            <div class="timeframe-change" id="googChange1W">-</div>
-                            <div class="timeframe-confidence" id="googConfidence1W">-</div>
-                            <div class="timeframe-signals" id="googSignals1W"></div>
-                        </div>
-                        <div class="timeframe-item">
-                            <div class="timeframe-label">1M</div>
-                            <div class="timeframe-prediction" id="googPrediction1M">-</div>
-                            <div class="timeframe-change" id="googChange1M">-</div>
-                            <div class="timeframe-confidence" id="googConfidence1M">-</div>
-                            <div class="timeframe-signals" id="googSignals1M"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
+                `);
+            });
+        </script>
     </div>
 
-    <!-- Live AI Terminal Log -->
+    <!-- Transparent Event Log -->
     <div class="terminal-container">
         <div class="terminal-header">
-            <span class="terminal-title">⌨️ LIVE EVENT LOG</span>
-            <span class="terminal-id">SES_ID: AI-SRV-982</span>
+            <span>System Event Log (Live Transparency)</span>
+            <span id="logStatus">Streaming...</span>
         </div>
-        <div id="liveLog" class="terminal-body">
-            <div class="log-entry system">[SYSTEM] Connection established. Waiting for market heartbeats...</div>
+        <div class="terminal-body" id="eventLog">
+            <div class="log-entry log-info">[SYSTEM] Initializing Market Analysis Suite...</div>
         </div>
     </div>
 
-    <!-- Explainer Section -->
+    <!-- Explainer Section ... same as before ... -->
     <div class="explainer-section">
-        <h2>🧠 AI Model &amp; Indicator Explainer</h2>
+        <h2>🧠 AI Model & Indicator Explainer</h2>
         <div class="explainer-grid">
             <div class="explainer-item accordion-item">
                 <div class="accordion-header" onclick="this.parentElement.classList.toggle('open')">
-                    <h3>ML Prediction Engine</h3><span class="accordion-arrow">▾</span>
+                    <h3>AI & Multi-Timeframe Engine</h3><span class="accordion-arrow">▾</span>
                 </div>
                 <div class="accordion-body">
-                    <p>Our hybrid AI uses optimized ML models (SVM, Random Forest, & Linear Regression) to analyze 11 core technical
-                        indicators, trained on deep market history to identify high-probability price targets.</p>
-                </div>
-            </div>
-            <div class="explainer-item accordion-item">
-                <div class="accordion-header" onclick="this.parentElement.classList.toggle('open')">
-                    <h3>Trend &amp; Momentum</h3><span class="accordion-arrow">▾</span>
-                </div>
-                <div class="accordion-body">
-                    <ul class="explainer-list">
-                        <li><b>Trend</b> — overall market direction. <span class="sig-positive">+0.03+</span> = strong
-                            bullish, <span class="sig-negative">−0.03−</span> = strong bearish.</li>
-                        <li><b>Momentum</b> — speed of recent price moves. Positive + uptrend = bullish extension;
-                            divergence warns of potential reversal.</li>
+                    <p>Linear Regression & Random Forest models analyze 20 professional indicators via <a href="https://github.com/ta4j/ta4j" style="color: #00d9ff; text-decoration: none;">TA4J</a> across 1D, 1W, and 1M timeframes to filter noise and reveal high-conviction trends.</p>
+                    <ul class="explainer-list" style="color: #aaa; font-size: 0.9em; margin-top: 10px; padding-left: 20px;">
+                        <li><b>Model Confidence</b> — AI certainty score. Higher % indicates strong historical correlation with current patterns.</li>
+                        <li><b>Data Samples</b> — Volume of historical price points analyzed.</li>
                     </ul>
                 </div>
             </div>
             <div class="explainer-item accordion-item">
                 <div class="accordion-header" onclick="this.parentElement.classList.toggle('open')">
-                    <h3>Technical Indicators</h3><span class="accordion-arrow">▾</span>
+                    <h3>Wyckoff Market Structure</h3><span class="accordion-arrow">▾</span>
                 </div>
                 <div class="accordion-body">
-                    <p>Our neural network processes 11 specialized features for every prediction:</p>
-                    <ul class="explainer-list">
-                        <li><b>Averages</b> — 5/20-period <b>SMA</b> and 12-period <b>EMA</b> for signal noise filtering.</li>
-                        <li><b>Stats</b> — 20-period <b>Volatility</b> and statistical <b>Z-Score</b> for range analysis.</li>
-                        <li><b>Velocity</b> — 10-period <b>Momentum</b> and <b>Rate of Change (ROC)</b> for price speed.</li>
-                        <li><b>Bands</b> — Real-time <b>Bollinger position</b> tracking institutional accumulation zones.</li>
-                        <li><b>Stability</b> — Multi-period <b>Trend Strength</b> and moving <b>Support/Resistance</b> levels.</li>
-                        <li><b>Dynamics</b> — High-order <b>Price Acceleration</b> to detect early breakout momentum.</li>
+                    <p>Detects <b>Accumulation</b>, <b>Markup</b>, <b>Distribution</b>, and <b>Markdown</b> phases. Uses the <i>Law of Effort vs Result</i> (Volume vs Price Spread) and <b>VWAP</b> to identify institutional activity.</p>
+                    <ul class="explainer-list" style="color: #aaa; font-size: 0.9em; margin-top: 10px; padding-left: 20px;">
+                        <li><b>Accumulation/Markup (Cyan/Green)</b> — Institutions are buying; suggests a <b>BULLISH</b> bias.</li>
+                        <li><b>Distribution/Markdown (Orange/Red)</b> — Institutions are selling; suggests a <b>BEARISH</b> bias.</li>
                     </ul>
                 </div>
             </div>
             <div class="explainer-item accordion-item">
                 <div class="accordion-header" onclick="this.parentElement.classList.toggle('open')">
-                    <h3>Multi-Timeframe Analysis</h3><span class="accordion-arrow">▾</span>
+                    <h3>Oscillators & Confirmation</h3><span class="accordion-arrow">▾</span>
                 </div>
                 <div class="accordion-body">
-                    <p>Cross-verification across <b>1D</b>, <b>1W</b>, and <b>1M</b> timeframes ensures predictions
-                        catch major secular trends while filtering out daily market noise.</p>
+                    <ul class="explainer-list" style="color: #aaa; font-size: 0.9em; padding-left: 20px;">
+                        <li><b>Trend/Momentum</b> — Overall direction and speed of moves. Positive + uptrend = Bullish confirmation.</li>
+                        <li><b>RSI Factor</b> — Distance from neutral 50. Significant decimals (±0.20) highlight overbought/oversold extremes.</li>
+                        <li><b>Indicators</b> — MACD, BB, SMAs, and Volume Profile signals are cross-referenced to confirm cyclical turns.</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="explainer-item accordion-item">
+                <div class="accordion-header" onclick="this.parentElement.classList.toggle('open')">
+                    <h3>Volatility & Money Flow</h3><span class="accordion-arrow">▾</span>
+                </div>
+                <div class="accordion-body">
+                    <ul class="explainer-list" style="color: #aaa; font-size: 0.9em; padding-left: 20px;">
+                        <li><b>Volatility (%)</b> — Measures price variance. <b>Low</b> suggests coiling; <b>High</b> suggests explosive moves and potential shakeouts.</li>
+                        <li><b>Money Flow (MF)</b> — Chaikin Money Flow tracks volume intensity. <b>Positive (> 0)</b>: Aggressive buying; <b>Negative (< 0)</b>: Aggressive selling.</li>
+                    </ul>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Footer -->
-    <footer style="text-align: center; margin-top: 50px; padding-bottom: 30px;">
+    <footer style="text-align: center; margin-top: 40px; padding-bottom: 20px;">
         <p style="
         color: #8888aa;
         font-family: 'Courier New', 'Space Mono', monospace;
@@ -264,263 +249,298 @@
     ">
             &copy; <span id="currentYear">2026</span>
             <a href="https://bornoutofcuriosity.com" style="color: #00d9ff; text-decoration: none;"
-                onmouseout="this.style.textDecoration='none'">
+               onmouseout="this.style.textDecoration='none'">
                 bornoutofcuriosity.com
             </a> | All experiments are ongoing.
         </p>
     </footer>
 
-    <!-- TradingView Widget Script -->
-    <script type="text/javascript" src="https://s3.tradingview.com/tv.js"></script>
-
     <script>
         document.getElementById('currentYear').textContent = new Date().getFullYear();
+        const charts = {};
+        
+        document.addEventListener('DOMContentLoaded', function () {
+            addLog("Initializing global market stream...", "info");
+            symbols.forEach(symbol => initializeChart(symbol));
+            refreshLatestPrices();
+            setInterval(refreshLatestPrices, 30000);
+        });
 
-        // ─── TradingView symbol mapping ────────────────────────────────────────
-        // TradingView uses exchange-prefixed symbols. SPY (S&P 500 ETF) is used for index tracking.
-        const TV_SYMBOLS = {
-            'SPY': 'AMEX:SPY',
-            'AAPL': 'NASDAQ:AAPL',
-            'MSFT': 'NASDAQ:MSFT',
-            'GOOG': 'NASDAQ:GOOG'
-        };
+        function initializeChart(symbol) {
+            const ctx = document.getElementById(`${symbol.toLowerCase()}Chart`).getContext('2d');
+            charts[symbol] = new Chart(ctx, {
+                type: 'candlestick',
+                data: {
+                    datasets: [{
+                        label: `${symbol} Price`,
+                        data: [],
+                        color: { up: '#4caf50', down: '#f44336', unchanged: '#999' },
+                        borderColor: { up: '#4caf50', down: '#f44336', unchanged: '#999' }
+                    }, {
+                        label: `AI Projection`,
+                        data: [],
+                        type: 'line',
+                        borderColor: '#00d9ff',
+                        borderDash: [5, 5],
+                        borderWidth: 2,
+                        pointRadius: 4,
+                        pointHoverRadius: 6,
+                        pointBackgroundColor: '#00d9ff',
+                        pointBorderColor: '#1a1a2e',
+                        pointBorderWidth: 2,
+                        fill: false,
+                        tension: 0.1
+                    }]
 
-        // ─── Mount TradingView Advanced Chart widgets ──────────────────────────
-        const symbols = ['SPY', 'AAPL', 'MSFT', 'GOOG'];
-
-        symbols.forEach(symbol => {
-            const containerId = `tv-${symbol.toLowerCase()}`;
-            new TradingView.widget({
-                container_id: containerId,
-                symbol: TV_SYMBOLS[symbol],
-                interval: 'D',           // Default: daily candles
-                timezone: 'Etc/UTC',
-                theme: 'dark',
-                style: '1',           // Candlestick
-                locale: 'en',
-                toolbar_bg: '#131722',
-                enable_publishing: false,
-                hide_top_toolbar: false,
-                hide_side_toolbar: false,
-                allow_symbol_change: false,     // Lock to the card's symbol
-                save_image: false,
-                withdateranges: true,
-                details: false,         // Hide right-side info panel
-                hotlist: false,
-                calendar: false,
-                show_popup_button: false,
-                width: '100%',
-                height: 500,
-                studies: [
-                    'BB@tv-basicstudies'
-                ],
-                overrides: {
-                    'mainSeriesProperties.candleStyle.upColor': '#4ade80',
-                    'mainSeriesProperties.candleStyle.downColor': '#ff6b6b',
-                    'mainSeriesProperties.candleStyle.borderUpColor': '#4ade80',
-                    'mainSeriesProperties.candleStyle.borderDownColor': '#ff6b6b',
-                    'mainSeriesProperties.candleStyle.wickUpColor': '#4ade80',
-                    'mainSeriesProperties.candleStyle.wickDownColor': '#ff6b6b',
-                    'paneProperties.background': '#131722',
-                    'paneProperties.vertGridProperties.color': 'rgba(255,255,255,0.05)',
-                    'paneProperties.horzGridProperties.color': 'rgba(255,255,255,0.05)',
-                    'scalesProperties.textColor': '#888888'
-                }
+                },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'nearest',
+                            axis: 'x',
+                            intersect: false
+                        },
+                        scales: {
+                            x: {
+                                type: 'time',
+                                time: { 
+                                    displayFormats: {
+                                        month: 'MMM YYYY',
+                                        day: 'MMM D'
+                                    }
+                                },
+                                grid: { color: 'rgba(255,255,255,0.05)' },
+                                ticks: { 
+                                    color: '#888',
+                                    maxRotation: 0,
+                                    autoSkip: true,
+                                    maxTicksLimit: 12
+                                }
+                            },
+                            y: { position: 'right', grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#888' } }
+                        },
+                        plugins: { 
+                            legend: { display: false },
+                            tooltip: {
+                                mode: 'nearest',
+                                axis: 'x',
+                                intersect: false,
+                                callbacks: {
+                                    title: function(items) {
+                                        if (!items.length) return '';
+                                        const item = items[0];
+                                        const x = item.parsed.x;
+                                        return moment(x).format('MMM D, YYYY, h:mm:ss a');
+                                    },
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.dataset.type === 'line') {
+                                            label += formatPrice(context.parsed.y);
+                                        } else {
+                                            label += 'O: ' + formatPrice(context.parsed.o) + 
+                                                     ' H: ' + formatPrice(context.parsed.h) + 
+                                                     ' L: ' + formatPrice(context.parsed.l) + 
+                                                     ' C: ' + formatPrice(context.parsed.c);
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        }
+                    }
             });
-        });
-
-        // ─── WebSocket + AI Predictions (unchanged) ───────────────────────────
-        let websocket = null;
-        let messageCount = 0;
-
-        const symbolColors = {
-            'SPY': '#00ff41',
-            'AAPL': '#4ade80',
-            'MSFT': '#22c55e',
-            'GOOG': '#16a34a'
-        };
-
-        showNotification('Please wait whilst AI predictions are generated (~20 seconds)…', 'info');
-
-        document.addEventListener('DOMContentLoaded', () => {
-            startPolling();
-            // Proactively prevent auto-scrolling issues caused by external widgets demanding focus
-            const scrollToTop = () => window.scrollTo(0, 0);
-            scrollToTop();
-            setTimeout(scrollToTop, 100);
-            setTimeout(scrollToTop, 500);
-            setTimeout(scrollToTop, 2000);
-        });
-
-        // ─── Price formatting ──────────────────────────────────────────────────
-        function formatPrice(price, symbol) {
-            return '$' + price.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            loadHistoricalData(symbol, '1d');
         }
 
-        // ─── Polling System (REST-based) ──────────────────────────────────────
-        function startPolling() {
-            console.log('🔄 Starting live polling...');
-            updateConnectionStatus('connected', '✅ Live Polling Active (Every 60s)');
-
-            // Initial fetch
-            fetchLatestData();
-
-            // Repeat every 60 seconds
-            setInterval(fetchLatestData, 60000);
+        function loadHistoricalData(symbol, timeframe) {
+            fetch(`/api/historical/${symbol}?timeframe=${timeframe}&limit=100&_=${Date.now()}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && charts[symbol]) {
+                        const ohlc = data.map(d => ({ x: d.timestamp, o: d.open, h: d.high, l: d.low, c: d.close }));
+                        charts[symbol].data.datasets[0].data = ohlc;
+                        charts[symbol].update('none');
+                        fetchAnalysis(symbol, timeframe);
+                    }
+                });
         }
 
-        async function fetchLatestData() {
-            try {
-                const response = await fetch('/api/chart/latest');
-                if (!response.ok) throw new Error('Polling failed');
-
-                const data = await response.json();
-                console.log('📊 Received latest data:', data);
-
-                // Process each symbol
-                Object.keys(data).forEach(symbol => {
-                    const update = data[symbol];
-                    if (update.price !== undefined) {
-                        const priceEl = document.getElementById(`${symbol.toLowerCase()}Price`);
-                        if (priceEl) priceEl.textContent = formatPrice(update.price, symbol);
-
-                        if (update.analysis) {
-                            updateTimeframePredictions(symbol, update.analysis);
+        function fetchAnalysis(symbol, timeframe) {
+            fetch(`/api/chart/data?symbol=${symbol}&timeframe=${timeframe}&_=${Date.now()}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data && data.analysis) {
+                        updateUIDisplay(symbol, data.analysis);
+                        if (data.analysis.analysisLogs) {
+                            data.analysis.analysisLogs.forEach(entry => addLog(`${symbol}: ${entry}`, "info"));
                         }
                     }
                 });
+        }
 
-                messageCount++;
-                document.getElementById('messageCount').textContent = messageCount;
-                addLogEntry('Market data synchronized via REST uplink.', 'success');
-            } catch (error) {
-                console.error('❌ Polling error:', error);
-                updateConnectionStatus('error', '❌ Polling Error - Retrying...');
-                addLogEntry('Uplink interference detected. Retrying...', 'warning');
+        function refreshLatestPrices() {
+            fetch('/api/chart/latest')
+                .then(res => res.json())
+                .then(data => {
+                    Object.keys(data).forEach(symbol => {
+                        const entry = data[symbol];
+                        if (entry.price) {
+                            const priceEl = document.getElementById(`${symbol.toLowerCase()}Price`);
+                            if (priceEl) priceEl.textContent = formatPrice(entry.price);
+                        }
+                    });
+                });
+        }
+
+        function updateUIDisplay(symbol, analysis) {
+            const sym = symbol.toLowerCase();
+            const horizons = { '1day': '1D', '1week': '1W', '1month': '1M' };
+            const currentPrice = analysis.currentPrice;
+            
+            Object.keys(horizons).forEach(h => {
+                const pred = analysis.timeframePredictions[h];
+                const wyck = analysis.wyckoffTimeframes ? analysis.wyckoffTimeframes[h] : null;
+                const uiH = horizons[h];
+                
+                if (pred) {
+                    const priceEl = document.getElementById(`${sym}Prediction${uiH}`);
+                    const changeEl = document.getElementById(`${sym}Change${uiH}`);
+                    const confEl = document.getElementById(`${sym}Confidence${uiH}`);
+                    const samplesEl = document.getElementById(`${sym}Samples${uiH}`);
+                    const trendEl = document.getElementById(`${sym}Trend${uiH}`);
+                    const momentumEl = document.getElementById(`${sym}Momentum${uiH}`);
+                    const rsiEl = document.getElementById(`${sym}RSI${uiH}`);
+                    
+                    if (priceEl) priceEl.textContent = formatPrice(pred.predictedPrice);
+                    
+                    const change = ((pred.predictedPrice - currentPrice) / currentPrice) * 100;
+                    if (changeEl) {
+                        changeEl.textContent = (change >= 0 ? "+" : "") + change.toFixed(2) + "%";
+                        changeEl.className = "timeframe-change " + (change >= 0 ? "bullish" : "bearish");
+                    }
+                    
+                    if (confEl) confEl.textContent = "Model Confidence: " + (pred.confidence * 100).toFixed(1) + "%";
+                    if (samplesEl) {
+                        const count = (pred.samples !== undefined && pred.samples !== null) ? pred.samples : "-";
+                        samplesEl.textContent = "Data Samples: " + count;
+                    }
+                    
+                    if (trendEl) {
+                        trendEl.textContent = (pred.trendValue >= 0 ? "+" : "") + pred.trendValue.toFixed(4);
+                        trendEl.className = (pred.trendValue >= 0 ? "sig-positive" : "sig-negative");
+                    }
+                    
+                    if (momentumEl) {
+                        momentumEl.textContent = (pred.momentum >= 0 ? "+" : "") + pred.momentum.toFixed(4);
+                        momentumEl.className = (pred.momentum >= 0 ? "sig-positive" : "sig-negative");
+                    }
+                    
+                    if (rsiEl) {
+                        rsiEl.textContent = (pred.rsiFactor >= 0 ? "+" : "") + pred.rsiFactor.toFixed(4);
+                        rsiEl.className = (pred.rsiFactor >= 0 ? "sig-positive" : "sig-negative");
+                    }
+                }
+                
+                if (wyck) {
+                    const phaseEl = document.getElementById(`${sym}Wyckoff${uiH}`);
+                    const volEl = document.getElementById(`${sym}Volatility${uiH}`);
+                    const mfEl = document.getElementById(`${sym}MoneyFlow${uiH}`);
+                    
+                    if (phaseEl) {
+                        phaseEl.textContent = wyck.phase;
+                        phaseEl.style.color = getPhaseColor(wyck.phase);
+                    }
+                    
+                    if (volEl) {
+                        volEl.textContent = wyck.volatility.toFixed(2) + "%";
+                        volEl.className = "sig-positive"; // Consistent with example
+                    }
+                    
+                    if (mfEl) {
+                        mfEl.textContent = (wyck.moneyFlow >= 0 ? "+" : "") + wyck.moneyFlow.toFixed(3);
+                        mfEl.className = (wyck.moneyFlow >= 0 ? "sig-positive" : "sig-negative");
+                    }
+                }
+            });
+            
+            // --- DRAW MULTI-TIMEFRAME AI PROJECTION LINE ---
+            const chart = charts[symbol];
+            if (chart && chart.data.datasets[0].data.length > 0) {
+                const candleData = chart.data.datasets[0].data;
+                
+                // Final robust fix: Use recent server analysis timestamp as anchor
+                // Ensure it is in 2026 by comparing with known 2026 threshold
+                const threshold2026 = 1735689600000; // Jan 1st 2026
+                const analysisTs = Number(analysis.timestamp || Date.now());
+                
+                let lastTs = analysisTs;
+                if (lastTs < threshold2026) {
+                    console.warn("Analysis timestamp suspicious, using Date.now()");
+                    lastTs = Date.now();
+                }
+                
+                const basePrice = Number(analysis.currentPrice || (candleData.length > 0 ? candleData[candleData.length-1].c : 0));
+                
+                // Add debug log to verify logic on user side
+                console.log(`[DEBUG] Pivot anchoring to: ${new Date(lastTs).toLocaleString()} (TS: ${lastTs})`);
+
+                if (analysis.timeframePredictions) {
+                    const dayPred = analysis.timeframePredictions['1day'];
+                    const weekPred = analysis.timeframePredictions['1week'];
+                    const monthPred = analysis.timeframePredictions['1month'];
+
+                    // Calculate future timestamps strictly based on lastTs
+                    const dayTime = lastTs + (24 * 60 * 60 * 1000);
+                    const weekTime = lastTs + (7 * 24 * 60 * 60 * 1000);
+                    const monthTime = lastTs + (30 * 24 * 60 * 60 * 1000);
+                    
+                    const projectionData = [{ x: lastTs, y: basePrice }];
+                    if (dayPred) projectionData.push({ x: dayTime, y: Number(dayPred.predictedPrice) });
+                    if (weekPred) projectionData.push({ x: weekTime, y: Number(weekPred.predictedPrice) });
+                    if (monthPred) projectionData.push({ x: monthTime, y: Number(monthPred.predictedPrice) });
+
+                    chart.data.datasets[1].data = projectionData;
+
+                    // Tighten the buffer to fix "too far left" issue but ensure May 1st is reached
+                    // current date March 27. monthTime is April 26.
+                    // Extending 14 days takes us to May 10th. This is enough to show May label.
+                    chart.options.scales.x.max = monthTime + (14 * 24 * 60 * 60 * 1000); 
+                    chart.update();
+                }
             }
         }
 
-        // ─── Analysis helpers ──────────────────────────────────────────────────
-        function isValidAnalysis(analysis) {
-            if (!analysis || Object.keys(analysis).length === 0) return false;
-            const hasSignal = !!(analysis.tradingSignal || analysis.signal);
-            const hasPrediction = analysis.predictedPrice !== undefined;
-            const hasConfidence = analysis.confidence !== undefined;
-            return [hasSignal, hasPrediction, hasConfidence].filter(Boolean).length >= 2;
+
+
+
+        function formatPrice(val) {
+            return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
         }
 
-        function updateTimeframePredictions(symbol, analysis) {
-            if (!analysis || !analysis.timeframePredictions) return;
-
-            const timeframes = { '1D': '1day', '1W': '1week', '1M': '1month' };
-
-            Object.entries(timeframes).forEach(([uiKey, backendKey]) => {
-                const pred = analysis.timeframePredictions[backendKey];
-
-                const predEl = document.getElementById(`${symbol.toLowerCase()}Prediction${uiKey}`);
-                const changeEl = document.getElementById(`${symbol.toLowerCase()}Change${uiKey}`);
-                const confEl = document.getElementById(`${symbol.toLowerCase()}Confidence${uiKey}`);
-                const signalsEl = document.getElementById(`${symbol.toLowerCase()}Signals${uiKey}`);
-
-                if (!pred) {
-                    if (predEl) predEl.textContent = '-';
-                    if (changeEl) changeEl.textContent = '-';
-                    if (confEl) confEl.textContent = '-';
-                    return;
-                }
-
-                // Price prediction
-                if (predEl && pred.predictedPrice) {
-                    predEl.textContent = formatPrice(pred.predictedPrice, symbol);
-                }
-
-                // % change
-                if (changeEl && pred.changePercent !== undefined) {
-                    const pct = pred.changePercent;
-                    const label = (pct >= 0 ? '+' : '') + pct.toFixed(1) + '%';
-                    changeEl.textContent = label;
-                    changeEl.className = 'timeframe-change ' + (pct >= 0 ? 'bullish' : 'bearish');
-                    changeEl.style.color = pct > 1.0 ? '#4ade80' : pct < -1.0 ? '#ff6b6b' : '#ff9800';
-                }
-
-                // Confidence & Samples
-                if (confEl && pred.confidence !== undefined) {
-                    let samplesHtml = pred.samples > 0 ? `<div style="font-size:0.85em; color:#888;">Data Samples: ${pred.samples}</div>` : '';
-                    confEl.innerHTML = `<div>Model Confidence: ${(pred.confidence * 100).toFixed(1)}%</div>${samplesHtml}`;
-                    confEl.style.opacity = '1';
-                    confEl.style.fontSize = '0.75em';
-                    confEl.style.marginTop = '4px';
-                }
-
-                // Trend / Momentum / RSI signals detail
-                if (signalsEl) {
-                    const fmt = v => v !== undefined ? (v >= 0 ? '+' : '') + v.toFixed(4) : '—';
-                    const trendVal = pred.trendValue;
-                    const momVal = pred.momentum;
-                    const rsiFactor = pred.rsiFactor;
-
-                    const trendColor = trendVal === undefined ? '#888' : (trendVal > 0 ? '#4ade80' : '#ff6b6b');
-                    const momColor = momVal === undefined ? '#888' : (momVal > 0 ? '#4ade80' : '#ff6b6b');
-                    const rsiColor = rsiFactor === undefined ? '#888' : (rsiFactor > 0 ? '#4ade80' : '#ff6b6b');
-
-                    signalsEl.innerHTML = `
-                        <div class="signal-detail"><span class="signal-label">Trend:</span> <span style="color:${trendColor}">${fmt(trendVal)}</span></div>
-                        <div class="signal-detail"><span class="signal-label">Momentum:</span> <span style="color:${momColor}">${fmt(momVal)}</span></div>
-                        <div class="signal-detail"><span class="signal-label">RSI Factor:</span> <span style="color:${rsiColor}">${fmt(rsiFactor)}</span></div>
-                    `;
-                }
-            });
+        function getPhaseColor(phase) {
+            if (!phase) return '#888';
+            if (phase.includes('BULLISH') || phase.includes('ACCUM') || phase.includes('MARKUP')) return '#4caf50';
+            if (phase.includes('BEARISH') || phase.includes('DIST') || phase.includes('MARKDOWN')) return '#f44336';
+            return '#ff9800';
         }
 
-        // ─── Auto-analysis ping via WebSocket every 30s ────────────────────────
-        setInterval(() => {
-            symbols.forEach(symbol => {
-                const priceEl = document.getElementById(`${symbol.toLowerCase()}Price`);
-                if (!priceEl || priceEl.textContent === '-') return;
+        function changeTimeScale(symbol, timeframe) { loadHistoricalData(symbol, timeframe); }
+        function refreshChart(symbol) { loadHistoricalData(symbol, '1d'); addLog(`Refreshing ${symbol} analysis...`, "info"); }
 
-                // Strip formatting to get a raw number
-                const raw = priceEl.textContent.replace(/[^0-9.]/g, '');
-                const price = parseFloat(raw);
-                if (!isNaN(price) && websocket && websocket.readyState === WebSocket.OPEN) {
-                    websocket.send(`analyze:${symbol},${price},0,1d`);
-                    addLogEntry(`[FORECAST] Requesting neural projection for ${symbol} @ ${formatPrice(price, symbol)}`, 'request');
-                }
-            });
-        }, 30000);
-
-        function addLogEntry(message, type = 'info') {
-            const logEl = document.getElementById('liveLog');
+        function addLog(msg, type) {
+            const logEl = document.getElementById('eventLog');
             if (!logEl) return;
             const entry = document.createElement('div');
-            entry.className = `log-entry ${type}`;
-            const time = new Date().toLocaleTimeString('en-GB', { hour12: false });
-            entry.innerHTML = `<span class="log-time">[${time}]</span> ${message}`;
-            logEl.prepend(entry);
-            if (logEl.children.length > 50) logEl.lastChild.remove();
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logEl.appendChild(entry);
+            logEl.scrollTop = logEl.scrollHeight;
+            while (logEl.children.length > 200) logEl.removeChild(logEl.firstChild);
         }
-
-        // ─── UI helpers ────────────────────────────────────────────────────────
-        function updateConnectionStatus(status, message) {
-            const el = document.getElementById('connectionStatus');
-            if (el) { el.textContent = message; el.className = `status-${status}`; }
-        }
-
-        function showNotification(message, type = 'info') {
-            const n = document.createElement('div');
-            const bg = type === 'success' ? '#00ff41' : type === 'error' ? '#ff6b6b' : '#00ff41';
-            n.style.cssText = `
-                position:fixed; top:20px; right:20px; padding:12px 20px;
-                border-radius:8px; color:#fff; font-weight:bold; z-index:10000;
-                background:${bg}; box-shadow:0 4px 12px rgba(0,0,0,0.3); font-size:14px;
-                max-width:380px; line-height:1.4;
-            `;
-            n.textContent = message;
-            document.body.appendChild(n);
-            setTimeout(() => { if (document.body.contains(n)) document.body.removeChild(n); }, 5000);
-        }
-
-        console.log('🎯 AI Stocks Dashboard ready — TradingView charts + AI predictions active');
     </script>
 </body>
-
 </html>

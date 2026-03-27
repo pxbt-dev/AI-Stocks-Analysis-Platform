@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.lang.management.ManagementFactory;
@@ -20,6 +22,12 @@ public class AIAnalysisResult {
     private List<FibonacciTimeZone> fibonacciTimeZones;
     private long timestamp;
     private long systemUptimeMs = ManagementFactory.getRuntimeMXBean().getUptime();
+
+    // WYCKOFF FIELDS (Ported from Crypto V2)
+    private String wyckoffPhase;
+    private String wyckoffDetails;
+    private Map<String, WyckoffResult> wyckoffTimeframes = new HashMap<>();
+    private List<String> analysisLogs = new ArrayList<>();
 
     // CONSTRUCTOR for backward compatibility
     public AIAnalysisResult(String symbol, double currentPrice, Map<String, PricePrediction> timeframePredictions,
